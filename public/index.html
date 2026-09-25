@@ -1,0 +1,38 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Óptica Megavisión</title><link rel="stylesheet" href="/style.css"></head><body>
+<div id="login" class="login"><div class="loginCard"><img src="/logo.jpeg" class="logoBig"><h2>Sistema de Gestión</h2>
+<input id="user" placeholder="Usuario"><input id="pass" type="password" placeholder="Contraseña"><button onclick="login()">INGRESAR</button>
+<small>MEGAVISIÓN · Sistema independiente</small></div></div>
+<div id="app" class="hidden"><aside><img src="/logo.jpeg" class="logo"><div id="who"></div>
+<button onclick="show('dashboard')">⌂ Inicio</button><button onclick="newClient()">＋ Nuevo cliente</button>
+<button onclick="show('search')">⌕ Buscar cliente</button><button onclick="show('pickup')">✓ Recojo / pago</button>
+<button onclick="show('history')">▤ Lista de clientes</button><button id="auditNav" onclick="show('audit')">◉ Auditoría</button>
+<button id="usersNav" onclick="show('users')">⚿ Usuarios</button><button onclick="logout()">⇥ Salir</button></aside><main>
+<section id="dashboard" class="page"><h1>Panel principal</h1><div class="cards"><div><b>VENTA DEL MES</b><span id="kSales">S/ 0.00</span></div><div><b>COBRADO</b><span id="kPaid">S/ 0.00</span></div><div><b>SALDO</b><span id="kBalance">S/ 0.00</span></div><div><b>CLIENTES</b><span id="kClients">0</span></div></div><div class="panel"><h2>Ventas generadas por mes</h2><div id="chart" class="chart"></div></div></section>
+<section id="client" class="page hidden"><div class="titleRow"><h1 id="clientTitle">Nuevo cliente y venta</h1><span id="editBadge"></span></div>
+<form id="clientForm" onsubmit="saveClient(event)"><input type="hidden" id="cid"><h3>Datos del cliente</h3>
+<div class="grid6"><label>Nombre<input id="name" required></label><label>Apellidos<input id="surname"></label><label>DNI<input id="dni"></label>
+<label>Edad<input id="age" type="number" min="0"></label><label>Teléfono<input id="phone"></label><label>Fecha<input id="date" type="date" required></label>
+<label>Contrato<input id="contract"></label><label>Orden<input id="order"></label><label>Responsable<input id="responsible"></label><label>DNI responsable<input id="responsibleDni"></label></div>
+<h3>Registro de medida</h3><table><thead><tr><th></th><th>ESF</th><th>CIL</th><th>EJE</th><th>AV lejos</th></tr></thead><tbody>
+<tr><th>OD</th><td><input id="odesf"></td><td><input id="odcil"></td><td><input id="odeje"></td><td><input id="odav"></td></tr>
+<tr><th>OI</th><td><input id="oiesf"></td><td><input id="oicil"></td><td><input id="oieje"></td><td><input id="oiav"></td></tr></tbody></table>
+<div class="grid3"><label>ADD<input id="add"></label><label>DP / DIP<input id="dp"></label><label>Tipo de corrección<input id="correction"></label></div>
+<h3>Venta</h3><div class="grid3"><label>Tipo de lente<input id="lens"></label><label>Precio lente S/<input id="lensPrice" type="number" step=".01"></label>
+<label>Montura<input id="frame"></label><label>Precio montura S/<input id="framePrice" type="number" step=".01"></label>
+<label>Otro producto<input id="other"></label><label>Precio otro S/<input id="otherPrice" type="number" step=".01"></label>
+<label>Total S/<input id="total" type="number" step=".01" min="0" oninput="calcBalance()" required></label>
+<label>Adelanto efectivo S/<input id="advanceCash" type="number" step=".01" min="0" oninput="calcBalance()"></label>
+<label>Adelanto Yape S/<input id="advanceYape" type="number" step=".01" min="0" oninput="calcBalance()"></label>
+<label>Saldo S/<input id="balance" readonly></label><label>Observaciones<input id="obs"></label></div>
+<div class="actions"><button class="primary" id="saveBtn">💾 GUARDAR CLIENTE Y VENTA</button><button type="button" onclick="clearForm()">Limpiar</button>
+<button type="button" id="deleteBtn" class="danger hidden" onclick="deleteCurrent()">Eliminar</button></div></form></section>
+<section id="search" class="page hidden"><h1>Buscar cliente</h1><div class="searchbar"><input id="q" placeholder="DNI, nombre, contrato u orden"><button onclick="searchClients()">Buscar</button></div><div id="results"></div></section>
+<section id="pickup" class="page hidden"><h1>Recojo / cancelar saldo</h1><div class="searchbar"><input id="pq" placeholder="DNI, nombre, contrato u orden"><button onclick="pickupSearch()">Buscar</button></div><div id="pickupResult"></div></section>
+<section id="history" class="page hidden"><h1>Lista de clientes</h1><div id="allRecords"></div></section>
+<section id="audit" class="page hidden"><h1>Auditoría</h1><div id="auditRows"></div></section>
+<section id="users" class="page hidden"><h1>Usuarios y contraseñas</h1><div class="panel"><p>El Administrador General puede crear usuarios por local.</p>
+<div class="grid3"><label>Usuario<input id="newUsername"></label><label>Nombre<input id="newDisplay"></label><label>Contraseña<input id="newPassword" type="password"></label>
+<label>Rol<select id="newRole"><option value="collaborator">Colaborador</option><option value="titular">Titular</option></select></label><label>Local ID<input id="newLocation" type="number"></label></div>
+<button class="primary" onclick="createUser()">CREAR USUARIO</button></div><div id="userRows"></div></section>
+</main></div><script src="/app.js"></script></body></html>
