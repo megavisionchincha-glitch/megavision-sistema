@@ -1,13 +1,16 @@
 {
-  "name": "megavision-sistema",
+  "name": "megavision-multiusuario",
   "version": "1.0.0",
-  "description": "Sistema de gestión de clientes y contactos de MEGAVISIÓN",
+  "private": true,
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "setup-admin": "node setup-admin.js"
   },
   "dependencies": {
-    "express": "^5.1.0",
-    "pg": "^8.16.3"
+    "bcryptjs": "^2.4.3",
+    "cookie-parser": "^1.4.6",
+    "express": "^4.21.2",
+    "pg": "^8.13.1"
   }
 }

@@ -1,64 +1,22 @@
-const express = require("express");
-const { Pool } = require("pg");
-
-const app = express();
-const PORT = process.env.PORT || 3000;
-
-app.use(express.json());
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false
-  }
-});
-
-app.get("/", (req, res) => {
-  res.send("MEGAVISIÓN - Sistema funcionando correctamente");
-});
-
-app.get("/contactos", async (req, res) => {
-  try {
-    const resultado = await pool.query(
-      "SELECT * FROM contactos ORDER BY fecha_registro DESC"
-    );
-
-    res.json(resultado.rows);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({
-      error: "Error al obtener los contactos"
-    });
-  }
-});
-
-app.post("/contactos", async (req, res) => {
-  try {
-    const {
-      nombres,
-      celular,
-      dni,
-      departamento,
-      observaciones
-    } = req.body;
-
-    const resultado = await pool.query(
-      `INSERT INTO contactos
-       (nombres, celular, dni, departamento, observaciones)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING *`,
-      [nombres, celular, dni, departamento, observaciones]
-    );
-
-    res.status(201).json(resultado.rows[0]);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({
-      error: "Error al guardar el contacto"
-    });
-  }
-});
-
-app.listen(PORT, () => {
-  console.log(`MEGAVISIÓN funcionando en puerto ${PORT}`);
-});
+const express=require('express'), path=require('path'), crypto=require('crypto'), {Pool}=require('pg'), cookieParser=require('cookie-parser'), bcrypt=require('bcryptjs');
+const app=express(), pool=new Pool({connectionString:process.env.DATABASE_URL,ssl:process.env.PGSSL==='true'?{rejectUnauthorized:false}:false});
+app.use(express.json({limit:'1mb'}));app.use(cookieParser());app.use(express.static(path.join(__dirname,'public')));
+const q=(t,p=[])=>pool.query(t,p); const audit=(u,a,e,id,d={})=>q('INSERT INTO audit_log(actor_name,actor_location_id,action,entity_type,entity_id,details) VALUES($1,$2,$3,$4,$5,$6)',[u.display_name,u.location_id,a,e,String(id||''),JSON.stringify(d)]);
+async function auth(req,res,next){try{let token=req.cookies.mv_session;if(!token)return res.status(401).json({error:'Sesión requerida'});let h=crypto.createHash('sha256').update(token).digest('hex');let {rows}=await q(`SELECT p.id,p.username,p.role,p.location_id,p.display_name,l.name location_name FROM app_sessions s JOIN staff_profiles p ON p.id=s.staff_id LEFT JOIN locations l ON l.id=p.location_id WHERE s.token_hash=$1 AND s.expires_at>NOW() AND p.active=true`,[h]);if(!rows[0])return res.status(401).json({error:'Sesión vencida'});req.user=rows[0];next()}catch(e){res.status(500).json({error:'Error de autenticación'})}}
+const editable=u=>u.role==='admin_general'||u.role==='titular';
+app.post('/api/login',async(req,res)=>{let {username,password}=req.body||{};let {rows}=await q('SELECT * FROM staff_profiles WHERE upper(username)=upper($1) AND active=true',[String(username||'')]);let u=null;for(let x of rows)if(await bcrypt.compare(String(password||''),x.password_hash)){u=x;break}if(!u)return res.status(401).json({error:'Usuario o contraseña incorrectos'});let token=crypto.randomBytes(32).toString('hex'),h=crypto.createHash('sha256').update(token).digest('hex');await q("INSERT INTO app_sessions(token_hash,staff_id,expires_at) VALUES($1,$2,NOW()+INTERVAL '12 hours')",[h,u.id]);res.cookie('mv_session',token,{httpOnly:true,sameSite:'lax',secure:process.env.NODE_ENV==='production',maxAge:43200000});let loc=u.location_id?(await q('SELECT name FROM locations WHERE id=$1',[u.location_id])).rows[0]?.name:null;res.json({id:u.id,username:u.username,role:u.role,location_id:u.location_id,display_name:u.display_name,location_name:loc})});
+app.get('/api/session',auth,(req,res)=>res.json(req.user));app.post('/api/logout',auth,async(req,res)=>{let h=crypto.createHash('sha256').update(req.cookies.mv_session).digest('hex');await q('DELETE FROM app_sessions WHERE token_hash=$1',[h]);res.clearCookie('mv_session');res.json({ok:true})});
+function scope(u,alias='s'){if(u.role==='admin_general')return {sql:'',p:[]};return {sql:` AND ${alias}.location_id=$1`,p:[u.location_id]}}
+app.get('/api/dashboard',auth,async(req,res)=>{let sc=scope(req.user),p=sc.p;let s=(await q(`SELECT COALESCE(SUM(total),0) sales,COALESCE(SUM(balance),0) pending,COUNT(DISTINCT client_id) clients FROM sales s WHERE deleted_at IS NULL AND date_trunc('month',sale_date)=date_trunc('month',CURRENT_DATE)${sc.sql}`,p)).rows[0];let pay=(await q(`SELECT COALESCE(SUM(s.advance),0)+COALESCE((SELECT SUM(p.amount) FROM payments p JOIN sales sx ON sx.id=p.sale_id WHERE sx.deleted_at IS NULL AND date_trunc('month',p.paid_at)=date_trunc('month',CURRENT_DATE)${req.user.role==='admin_general'?'':' AND p.location_id=$1'}),0) collected FROM sales s WHERE s.deleted_at IS NULL AND date_trunc('month',s.sale_date)=date_trunc('month',CURRENT_DATE)${sc.sql}`,p)).rows[0];let monthly=(await q(`SELECT to_char(sale_date,'YYYY-MM') month,SUM(total) total FROM sales s WHERE deleted_at IS NULL AND sale_date>=CURRENT_DATE-INTERVAL '12 months'${sc.sql} GROUP BY 1 ORDER BY 1`,p)).rows;res.json({sales:+s.sales,pending:+s.pending,clients:+s.clients,collected:+pay.collected,monthly})});
+app.get('/api/search',auth,async(req,res)=>{let term='%'+String(req.query.q||'').trim()+'%',sc=scope(req.user);let p=[...sc.p,term],n=p.length;let {rows}=await q(`SELECT c.id client_id,c.first_name,c.last_name,c.dni,s.id sale_id,s.contract_no,s.order_no,s.balance FROM clients c JOIN sales s ON s.client_id=c.id WHERE s.deleted_at IS NULL${sc.sql} AND (c.first_name ILIKE $${n} OR c.last_name ILIKE $${n} OR c.dni ILIKE $${n} OR s.contract_no ILIKE $${n} OR s.order_no ILIKE $${n}) ORDER BY s.created_at DESC LIMIT 100`,p);res.json(rows)});
+app.get('/api/clients',auth,async(req,res)=>{let sc=scope(req.user);let {rows}=await q(`SELECT c.first_name,c.last_name,c.dni,s.id sale_id,s.contract_no,s.order_no,s.balance FROM clients c JOIN sales s ON s.client_id=c.id WHERE s.deleted_at IS NULL${sc.sql} ORDER BY s.created_at DESC LIMIT 500`,sc.p);res.json(rows)});
+app.get('/api/sales/:id',auth,async(req,res)=>{let sc=scope(req.user);let p=[...sc.p,req.params.id],n=p.length;let {rows}=await q(`SELECT s.*,c.first_name,c.last_name,c.dni,c.age,c.phone,c.responsible_full_name,c.responsible_dni,m.od_esf odesf,m.od_cil odcil,m.od_eje odeje,m.od_av odav,m.oi_esf oiesf,m.oi_cil oicil,m.oi_eje oieje,m.oi_av oiav,m.add_value,m.dp_dip,m.correction_type FROM sales s JOIN clients c ON c.id=s.client_id LEFT JOIN measurements m ON m.sale_id=s.id WHERE s.deleted_at IS NULL${sc.sql} AND s.id=$${n}`,p);if(!rows[0])return res.status(404).json({error:'Registro no encontrado'});res.json(rows[0])});
+app.post('/api/sales',auth,async(req,res)=>{let b=req.body||{},u=req.user,loc=u.role==='admin_general'?(+b.location_id||1):u.location_id;if(!b.first_name)return res.status(400).json({error:'Falta el nombre'});let client=await q('INSERT INTO clients(first_name,last_name,dni,age,phone,responsible_full_name,responsible_dni) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id',[b.first_name,b.last_name||'',b.dni||'',b.age?+b.age:null,b.phone||'',b.responsible_full_name||'',b.responsible_dni||'']);let total=+b.total||0,ac=+b.advance_cash||0,ay=+b.advance_yape||0,adv=ac+ay,sale=await q(`INSERT INTO sales(client_id,location_id,sale_date,contract_no,order_no,lens_type,frame,total,advance,balance,observations,created_by,lens_price,frame_price,other_item,other_price,advance_cash,advance_yape) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING id`,[client.rows[0].id,loc,b.sale_date||new Date().toISOString().slice(0,10),b.contract_no||'',b.order_no||'',b.lens_type||'',b.frame||'',total,adv,Math.max(0,total-adv),b.observations||'',u.display_name,+b.lens_price||0,+b.frame_price||0,b.other_item||'',+b.other_price||0,ac,ay]);let id=sale.rows[0].id;await q('INSERT INTO measurements(sale_id,od_esf,od_cil,od_eje,od_av,oi_esf,oi_cil,oi_eje,oi_av,add_value,dp_dip,correction_type) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)',[id,b.od_esf||'',b.od_cil||'',b.od_eje||'',b.od_av||'',b.oi_esf||'',b.oi_cil||'',b.oi_eje||'',b.oi_av||'',b.add_value||'',b.dp_dip||'',b.correction_type||'']);await audit(u,'CREAR','sale',id);res.json({ok:true,id})});
+app.put('/api/sales/:id',auth,async(req,res)=>{if(!editable(req.user))return res.status(403).json({error:'Sin permiso para modificar'});let b=req.body||{},sc=scope(req.user),p=[...sc.p,req.params.id],n=p.length,old=(await q(`SELECT * FROM sales s WHERE deleted_at IS NULL${sc.sql} AND id=$${n}`,p)).rows[0];if(!old)return res.status(404).json({error:'Registro no encontrado'});let total=+b.total||0,ac=+b.advance_cash||0,ay=+b.advance_yape||0,adv=ac+ay;await q('UPDATE clients SET first_name=$1,last_name=$2,dni=$3,age=$4,phone=$5,responsible_full_name=$6,responsible_dni=$7 WHERE id=$8',[b.first_name,b.last_name||'',b.dni||'',b.age?+b.age:null,b.phone||'',b.responsible_full_name||'',b.responsible_dni||'',old.client_id]);await q('UPDATE sales SET sale_date=$1,contract_no=$2,order_no=$3,lens_type=$4,frame=$5,total=$6,advance=$7,balance=$8,observations=$9,lens_price=$10,frame_price=$11,other_item=$12,other_price=$13,advance_cash=$14,advance_yape=$15,updated_at=NOW() WHERE id=$16',[b.sale_date,b.contract_no||'',b.order_no||'',b.lens_type||'',b.frame||'',total,adv,Math.max(0,total-adv),b.observations||'',+b.lens_price||0,+b.frame_price||0,b.other_item||'',+b.other_price||0,ac,ay,old.id]);await q('UPDATE measurements SET od_esf=$1,od_cil=$2,od_eje=$3,od_av=$4,oi_esf=$5,oi_cil=$6,oi_eje=$7,oi_av=$8,add_value=$9,dp_dip=$10,correction_type=$11 WHERE sale_id=$12',[b.od_esf||'',b.od_cil||'',b.od_eje||'',b.od_av||'',b.oi_esf||'',b.oi_cil||'',b.oi_eje||'',b.oi_av||'',b.add_value||'',b.dp_dip||'',b.correction_type||'',old.id]);await audit(req.user,'MODIFICAR','sale',old.id);res.json({ok:true})});
+app.delete('/api/sales/:id',auth,async(req,res)=>{if(!editable(req.user))return res.status(403).json({error:'Sin permiso para eliminar'});let sc=scope(req.user),p=[...sc.p,req.params.id],n=p.length,old=(await q(`SELECT * FROM sales s WHERE deleted_at IS NULL${sc.sql} AND id=$${n}`,p)).rows[0];if(!old)return res.status(404).json({error:'Registro no encontrado'});await q('UPDATE sales SET deleted_at=NOW() WHERE id=$1',[old.id]);await audit(req.user,'ELIMINAR','sale',old.id);res.json({ok:true})});
+app.post('/api/payments',auth,async(req,res)=>{let b=req.body||{},sc=scope(req.user),p=[...sc.p,b.sale_id],n=p.length,s=(await q(`SELECT * FROM sales s WHERE deleted_at IS NULL${sc.sql} AND id=$${n}`,p)).rows[0],amount=+b.amount||0;if(!s)return res.status(404).json({error:'Venta no encontrada'});if(amount<=0||amount>+s.balance)return res.status(400).json({error:'Monto inválido'});let bal=+s.balance-amount;await q('INSERT INTO payments(sale_id,location_id,amount,method,balance_after,created_by) VALUES($1,$2,$3,$4,$5,$6)',[s.id,s.location_id,amount,b.method||'Efectivo',bal,req.user.display_name]);await q('UPDATE sales SET balance=$1,updated_at=NOW() WHERE id=$2',[bal,s.id]);await audit(req.user,'PAGO','sale',s.id,{amount,method:b.method,balance:bal});res.json({ok:true,balance:bal})});
+app.get('/api/audit',auth,async(req,res)=>{if(req.user.role!=='admin_general')return res.status(403).json({error:'Solo Administrador General'});res.json((await q('SELECT * FROM audit_log ORDER BY occurred_at DESC LIMIT 500')).rows)});
+app.get('/api/users',auth,async(req,res)=>{if(req.user.role!=='admin_general')return res.status(403).json({error:'Solo Administrador General'});res.json((await q('SELECT p.id,p.username,p.role,p.display_name,p.location_id,l.name location_name FROM staff_profiles p LEFT JOIN locations l ON l.id=p.location_id WHERE p.active=true ORDER BY p.id')).rows)});
+app.post('/api/users',auth,async(req,res)=>{if(req.user.role!=='admin_general')return res.status(403).json({error:'Solo Administrador General'});let b=req.body||{};if(!b.username||String(b.password||'').length<8)return res.status(400).json({error:'Usuario y contraseña de al menos 8 caracteres'});let h=await bcrypt.hash(String(b.password),12);await q('INSERT INTO staff_profiles(username,password_hash,role,location_id,display_name,active) VALUES($1,$2,$3,$4,$5,true)',[b.username,h,b.role||'collaborator',b.location_id||null,b.display_name||b.username]);res.json({ok:true})});
+app.get('*',(req,res)=>res.sendFile(path.join(__dirname,'public/index.html')));
+app.listen(process.env.PORT||3000,()=>console.log('MEGAVISION listo en puerto '+(process.env.PORT||3000)));

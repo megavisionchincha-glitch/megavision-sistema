@@ -1,0 +1,21 @@
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: megavision
+      POSTGRES_USER: megavision
+      POSTGRES_PASSWORD: CAMBIAR_ESTA_CLAVE_DB
+    volumes:
+      - megavision_db:/var/lib/postgresql/data
+      - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+  web:
+    build: .
+    restart: unless-stopped
+    depends_on: [db]
+    ports: ["3000:3000"]
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://megavision:CAMBIAR_ESTA_CLAVE_DB@db:5432/megavision
+volumes:
+  megavision_db:
