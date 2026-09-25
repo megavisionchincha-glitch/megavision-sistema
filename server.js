@@ -1,5 +1,12 @@
 const express=require('express'), path=require('path'), crypto=require('crypto'), {Pool}=require('pg'), cookieParser=require('cookie-parser'), bcrypt=require('bcryptjs');
-const app=express(), pool=new Pool({connectionString:process.env.DATABASE_URL,ssl:process.env.PGSSL==='true'?{rejectUnauthorized:false}:false});
+const app=express(), pool=new Pool({
+  host: process.env.PGHOST,
+  port: process.env.PGPORT,
+  database: process.env.PGDATABASE,
+  user: process.env.PGUSER,
+  password: process.env.PGPASSWORD,
+  ssl: { rejectUnauthorized: false }
+});
 app.use(express.json({limit:'1mb'}));app.use(cookieParser());app.use(express.static(path.join(__dirname,'public')));
 const q=(t,p=[])=>pool.query(t,p); const audit=(u,a,e,id,d={})=>q('INSERT INTO audit_log(actor_name,actor_location_id,action,entity_type,entity_id,details) VALUES($1,$2,$3,$4,$5,$6)',[u.display_name,u.location_id,a,e,String(id||''),JSON.stringify(d)]);
 async function auth(req,res,next){try{let token=req.cookies.mv_session;if(!token)return res.status(401).json({error:'Sesión requerida'});let h=crypto.createHash('sha256').update(token).digest('hex');let {rows}=await q(`SELECT p.id,p.username,p.role,p.location_id,p.display_name,l.name location_name FROM app_sessions s JOIN staff_profiles p ON p.id=s.staff_id LEFT JOIN locations l ON l.id=p.location_id WHERE s.token_hash=$1 AND s.expires_at>NOW() AND p.active=true`,[h]);if(!rows[0])return res.status(401).json({error:'Sesión vencida'});req.user=rows[0];next()}catch(e){res.status(500).json({error:'Error de autenticación'})}}
