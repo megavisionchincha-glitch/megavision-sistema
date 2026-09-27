@@ -7,7 +7,7 @@
 <button onclick="show('dashboard')">⌂ Inicio</button><button onclick="newClient()">＋ Nuevo cliente</button>
 <button onclick="show('search')">⌕ Buscar cliente</button><button onclick="show('pickup')">✓ Recojo / pago</button>
 <button onclick="show('history')">▤ Lista de clientes</button><button id="auditNav" onclick="show('audit')">◉ Auditoría</button>
-<button id="usersNav" onclick="show('users')">⚿ Usuarios</button><button onclick="logout()">⇥ Salir</button></aside><main>
+<button id="usersNav" onclick="show('users')">⚿ Usuarios</button><button id="locationsNav" onclick="show('locations')">🏪 Locales</button>
 <section id="dashboard" class="page"><h1>Panel principal</h1><div class="cards"><div><b>VENTA DEL MES</b><span id="kSales">S/ 0.00</span></div><div><b>COBRADO</b><span id="kPaid">S/ 0.00</span></div><div><b>SALDO</b><span id="kBalance">S/ 0.00</span></div><div><b>CLIENTES</b><span id="kClients">0</span></div></div><div class="panel"><h2>Ventas generadas por mes</h2><div id="chart" class="chart"></div></div></section>
 <section id="client" class="page hidden"><div class="titleRow"><h1 id="clientTitle">Nuevo cliente y venta</h1><span id="editBadge"></span></div>
 <form id="clientForm" onsubmit="saveClient(event)"><input type="hidden" id="cid"><h3>Datos del cliente</h3>
@@ -35,4 +35,4 @@
 <div class="grid3"><label>Usuario<input id="newUsername"></label><label>Nombre<input id="newDisplay"></label><label>Contraseña<input id="newPassword" type="password"></label>
 <label>Rol<select id="newRole"><option value="collaborator">Colaborador</option><option value="titular">Titular</option></select></label><label>Local ID<input id="newLocation" type="number"></label></div>
 <button class="primary" onclick="createUser()">CREAR USUARIO</button></div><div id="userRows"></div></section>
-</main></div><script src="/app.js"></script></body></html>
+<section id="locations" class="page hidden"><h1>Locales</h1><div class="panel"><p>Crear nuevo local</p><div class="grid3"><label>Nombre del local<input id="newLocationName" placeholder="Ejemplo: MEGAVISION CHINCHA"></label></div><button class="primary" onclick="createLocation()">CREAR LOCAL</button></div><div id="locationRows"></div></section></main></div><script src="/app.js"></script></body></html>
